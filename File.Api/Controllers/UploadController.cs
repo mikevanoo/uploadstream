@@ -87,6 +87,32 @@ namespace File.Api.Controllers {
             });
         }
 
+        [HttpPost("stream/json")]
+        public async Task<IActionResult> ControllerJsonModelStream() {
+            byte[] buffer = new byte[BUF_SIZE];
+            List<IFormFile> files = new List<IFormFile>();
+
+            var model = await this.StreamFilesJsonModel<StreamModel>("jsonData", async x => {
+                using (var stream = x.OpenReadStream())
+                    while (await stream.ReadAsync(buffer, 0, buffer.Length) > 0) ;
+                files.Add(x);
+            });
+
+            if (!ModelState.IsValid)
+                return BadRequest();
+
+            return Ok(new {
+                Model = model,
+                Files = files.Select(x => new {
+                    x.Name,
+                    x.FileName,
+                    x.ContentDisposition,
+                    x.ContentType,
+                    x.Length
+                })
+            });
+        }
+
         [HttpPost("stream/modeless")]
         public async Task<IActionResult> ControllerStream() {
             byte[] buffer = new byte[BUF_SIZE];

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -42,7 +43,7 @@ namespace File.Api.IntegrationTests {
                 return base64Files;
             }
         }
-
+        
         public static IEnumerable<object[]> PostData {
             get {
                 var files = filenames.Select(x => {
@@ -56,6 +57,26 @@ namespace File.Api.IntegrationTests {
                     return new[] { multicontent };
                 })
                 .ToArray();
+
+                return files;
+            }
+        }
+
+        public static IEnumerable<object[]> PostDataWithJsonContent {
+            get {
+                var files = filenames.Select(x => {
+                        var path = Path.Combine(BaseDir, x);
+                        var multicontent = new MultipartFormDataContent();
+                        ByteArrayContent bytes = new ByteArrayContent(File.ReadAllBytes(path));
+                        bytes.Headers.Add("Content-Type", x.EndsWith(".png") ? "image/png" : x.EndsWith(".jpg") ? "image/jpeg" : "application/octet-stream");
+                        multicontent.Add(bytes, "files", x);
+
+                        var json = new StringContent("{\"name\":\"name\",\"description\":\"description\"}", Encoding.UTF8, "application/json");
+                        multicontent.Add(json, "jsonData");
+                    
+                        return new[] { multicontent };
+                    })
+                    .ToArray();
 
                 return files;
             }
@@ -178,6 +199,25 @@ namespace File.Api.IntegrationTests {
 
             // ACT
             var response = await _fixture.Client.PostAsync("api/stream", postData);
+
+            // ASSERT
+            response.EnsureSuccessStatusCode();
+
+            var responseStr = await response.Content.ReadAsStringAsync();
+            var model = JsonConvert.DeserializeObject<HttpRequestResult>(responseStr);
+
+            model.Model.Name.Should().Contain("name");
+            model.Model.Description.Should().Contain("description");
+            model.Files.Count().Should().Be(1);
+        }
+
+        [Theory]
+        [MemberData(nameof(PostDataWithJsonContent), DisableDiscoveryEnumeration = true)]
+        public async void StreamFileWithJson(HttpContent postData) {
+            // ARRANGE
+
+            // ACT
+            var response = await _fixture.Client.PostAsync("api/stream/json", postData);
 
             // ASSERT
             response.EnsureSuccessStatusCode();
